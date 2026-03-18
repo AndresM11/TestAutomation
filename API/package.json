@@ -1,0 +1,16 @@
+{
+  "name": "petstore-api-tests",
+  "version": "1.0.0",
+  "description": "Automated API tests for the PetStore user lifecycle using Cypress and TypeScript",
+  "scripts": {
+    "cy:open": "cypress open",
+    "cy:run": "cypress run"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "cypress": "^13.17.0",
+    "typescript": "^5.6.0"
+  },
+  "author": "",
+  "license": "MIT"
+}
