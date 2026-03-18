@@ -1,0 +1,16 @@
+{
+  "initial": {
+    "id": 1001,
+    "username": "testuser_pipe",
+    "firstName": "Carlos",
+    "lastName": "Ramirez",
+    "email": "carlos.ramirez@example.com",
+    "password": "Pass1234!",
+    "phone": "3001234567",
+    "userStatus": 1
+  },
+  "updated": {
+    "firstName": "Santiago",
+    "email": "santiago.ramirez@example.com"
+  }
+}
