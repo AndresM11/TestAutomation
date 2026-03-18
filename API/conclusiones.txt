@@ -1,0 +1,121 @@
+CONCLUSIONES Y HALLAZGOS — PETSTORE API TESTS
+=============================================
+
+API BAJO PRUEBA
+---------------
+URL base : https://petstore.swagger.io/v2
+Tipo     : API REST pública de demostración (Swagger Petstore)
+Propósito: Entorno de práctica para pruebas de servicios REST
+
+
+HALLAZGOS TÉCNICOS
+------------------
+
+1. Contrato de respuesta inconsistente en escritura vs. lectura
+   Los endpoints de escritura (POST /user, PUT /user/{username}) no retornan
+   el objeto User afectado. En su lugar, devuelven un wrapper genérico:
+   { code: 200, type: "unknown", message: "<userId>" }
+   Esto implica que la verificación de los datos creados o actualizados debe
+   realizarse siempre mediante una llamada GET posterior, no mediante la
+   respuesta de la operación de escritura. Es un patrón común en APIs antiguas
+   que no siguen REST puro.
+
+2. Ausencia de soporte PATCH
+   La API no implementa el método PATCH para actualizaciones parciales.
+   El endpoint PUT /user/{username} requiere el objeto User completo.
+   Enviar únicamente los campos a actualizar resulta en que los campos omitidos
+   se sobreescriben con valores por defecto (cadena vacía o cero).
+   El spec resuelve esto combinando el usuario original con los campos nuevos:
+   { ...user, ...updatedData }
+
+3. API pública y compartida — riesgo de colisiones
+   El entorno de PetStore es completamente público: cualquier usuario puede
+   crear, modificar o eliminar registros con cualquier username. Para garantizar
+   aislamiento entre ejecuciones y entre distintos testers, el username de
+   prueba incorpora un sufijo de timestamp en tiempo de ejecución:
+   testuser_pipe_<timestamp>
+   Este mecanismo hace cada ejecución determinísticamente única.
+
+4. Ausencia de autenticación en los endpoints de usuario
+   Los endpoints /user (POST, GET, PUT, DELETE) no requieren ningún token de
+   autenticación ni API key. Esto simplifica las pruebas pero refleja que el
+   entorno es exclusivamente de demostración y no representa una implementación
+   de seguridad real.
+
+5. Latencia predecible y baja
+   Las respuestas de la API presentan latencias consistentemente bajas (< 200ms
+   en promedio para GET/PUT/DELETE, ~600ms para el primer POST). No se
+   detectaron condiciones de carrera ni necesidad de esperas explícitas entre
+   operaciones sucesivas del mismo recurso.
+
+6. El campo id no es auto-generado por la API
+   La API acepta y almacena el id enviado en el cuerpo del POST sin generarlo
+   automáticamente. Esto puede causar colisiones si múltiples tests envían el
+   mismo id. Aunque en este caso el id no se usa como identificador primario
+   para las operaciones (se usa username), es una característica a considerar
+   en suites más amplias.
+
+
+DECISIONES DE DISEÑO
+--------------------
+
+1. API Client como patrón de diseño
+   Se implementó una clase UserApiClient que encapsula todos los endpoints del
+   recurso User, siguiendo el mismo principio de separación de responsabilidades
+   que el Page Object Model en pruebas E2E. El spec únicamente invoca métodos
+   del cliente sin conocer URLs, métodos HTTP ni estructura de payload.
+
+2. cy.request() como herramienta de pruebas HTTP
+   Cypress incluye cy.request() nativamente, lo que elimina la necesidad de
+   instalar librerías adicionales como Axios o Supertest. cy.request() maneja
+   automáticamente la serialización JSON, establece los headers correctos cuando
+   se configura Content-Type, y participa del sistema de reintentos y timeouts
+   de Cypress.
+
+3. Cinco bloques it independientes
+   A diferencia del test E2E de SauceDemo (que requiere un único it por
+   depender de estado de navegador), las pruebas de API con cy.request() no
+   dependen de sesión browser. Separar los casos en 5 bloques it proporciona
+   reportes granulares: si el GET posterior a un PUT falla, el reporte señala
+   exactamente qué operación falló, sin necesidad de inspeccionar el log
+   completo de un único bloque monolítico.
+
+4. Variables de closure en el scope del describe
+   El usuario y los datos de actualización se declaran con let en el scope del
+   describe y se inicializan en el hook before(). Este patrón permite que todos
+   los it blocks compartan el mismo objeto user sin recurrir a Cypress.env(),
+   cy.wrap() ni alias (@), manteniendo el código simple y directo.
+
+5. Datos de prueba en fixture
+   Los valores del usuario de prueba (campos del formulario, datos de
+   actualización) están externalizados en cypress/fixtures/user.json. Esto
+   separa los datos del test de la lógica de prueba, facilita el mantenimiento
+   y permite reutilizar el fixture para múltiples specs en el futuro.
+
+
+OBSERVACIONES SOBRE CONFIABILIDAD
+----------------------------------
+- Los 5 tests pasan de forma consistente en ejecuciones repetidas gracias al
+  username único por timestamp.
+- No se detectó flakiness. La API responde de forma confiable dentro del
+  responseTimeout configurado (30 segundos).
+- El orden de ejecución de los tests es importante: la secuencia
+  crear → leer → actualizar → verificar → eliminar debe mantenerse.
+  Cypress garantiza el orden dentro de un describe por diseño.
+
+
+POSIBLES MEJORAS
+----------------
+1. Cobertura de casos negativos: verificar que GET /user/{username} retorne 404
+   después de eliminar el usuario, y que POST con datos inválidos retorne 400/422.
+2. Ciclos de limpieza: implementar un hook after() que garantice la eliminación
+   del usuario incluso si la suite falla en un paso intermedio, evitando datos
+   residuales en el entorno compartido.
+3. Esquema de validación de respuestas: usar una librería de validación de
+   esquemas (como ajv) para verificar la estructura completa del objeto User
+   retornado, no solo los campos específicos del test.
+4. Variables de entorno: mover el username base a variables de entorno de
+   Cypress (cypress.env.json) para facilitar la configuración en distintos
+   entornos de ejecución.
+5. Integración CI/CD: agregar un workflow de GitHub Actions que ejecute ambas
+   suites (E2E y API) en paralelo en cada pull request.
