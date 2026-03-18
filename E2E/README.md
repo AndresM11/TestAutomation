@@ -12,7 +12,7 @@ Proyecto de automatización E2E que valida el flujo completo de compra en [sauce
 
 ```bash
 git clone https://github.com/AndresM11/TestAutomation.git
-cd TestAutomation
+cd TestAutomation/E2E
 npm install
 ```
 
