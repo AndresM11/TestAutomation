@@ -1,0 +1,97 @@
+CONCLUSIONES Y HALLAZGOS — SAUCEDEMO E2E AUTOMATION
+====================================================
+
+APLICACIÓN BAJO PRUEBA
+----------------------
+URL      : https://www.saucedemo.com
+Tipo     : Single Page Application (SPA)
+Propósito: Entorno de práctica para automatización de pruebas de software
+
+
+HALLAZGOS TÉCNICOS
+------------------
+
+1. Selectores estables mediante atributos data-test
+   La aplicación expone atributos "data-test" en los elementos interactivos clave:
+   botones de carrito, campos del formulario y controles de navegación. Este
+   atributo es inmune a cambios de estilos y refactorizaciones de CSS, lo que
+   lo convierte en el selector más resiliente para pruebas automatizadas.
+
+2. Flujo de compra lineal y predecible
+   El flujo de cinco pasos (login → inventario → carrito → checkout paso 1 →
+   checkout paso 2 → confirmación) es completamente lineal. No presenta estados
+   asíncronos complejos ni condiciones de carrera, lo que permite confiar en el
+   mecanismo de reintentos automático de Cypress sin necesidad de esperas
+   explícitas con cy.wait().
+
+3. URLs descriptivas como puntos de control
+   Cada pantalla tiene una ruta única y predecible (/inventory.html, /cart.html,
+   /checkout-step-one.html, etc.). Esto permite usar aserciones de URL como
+   checkpoints entre pasos sin depender de elementos visuales específicos.
+
+4. Credenciales de prueba predefinidas
+   La aplicación provee múltiples usuarios de prueba documentados en su página de
+   login: standard_user, locked_out_user, problem_user, performance_glitch_user,
+   entre otros. Esto facilita la extensión de la suite con casos de prueba
+   negativos sin gestión de usuarios en backend.
+
+5. Comportamiento de los botones de carrito
+   Al hacer clic en "Add to cart", el botón del producto correspondiente cambia a
+   "Remove". El selector utilizado en InventoryPage (`[data-test^="add-to-cart"]`
+   dentro de `.inventory_item`) permite seleccionar productos por posición en la
+   lista de forma independiente de este cambio de estado, lo que garantiza que
+   siempre se agregan dos productos distintos.
+
+
+DECISIONES DE DISEÑO
+--------------------
+
+1. Page Object Model (POM)
+   Se adoptó el patrón POM para encapsular los selectores y las acciones de cada
+   pantalla en clases dedicadas. Esto separa la lógica de navegación del código
+   del test, reduce la duplicación y facilita el mantenimiento cuando la UI cambia
+   sin necesidad de modificar los specs.
+
+2. Un único bloque "it" para el flujo E2E completo
+   Cypress resetea el estado del navegador (cookies, localStorage, sessionStorage)
+   entre bloques "it" dentro de un mismo "describe". Un flujo E2E que depende de
+   estado acumulado —sesión activa, productos en carrito— requiere ejecutarse en
+   un único contexto continuo. Concentrar los pasos en un solo "it" es la práctica
+   correcta para este tipo de prueba.
+
+3. Datos de prueba en fixtures
+   Las credenciales y los datos del formulario se externalizaron en
+   cypress/fixtures/users.json. Esto evita valores hardcodeados en el spec,
+   facilita la gestión de múltiples conjuntos de datos y es la práctica
+   recomendada por la documentación oficial de Cypress.
+
+4. TypeScript con modo estricto
+   El uso de TypeScript con "strict: true" en tsconfig.json garantiza tipado
+   seguro en los page objects y en la definición de la interfaz UserFixture.
+   Ayuda a detectar en tiempo de compilación errores que en JavaScript solo
+   aparecerían en tiempo de ejecución.
+
+
+OBSERVACIONES SOBRE CONFIABILIDAD
+----------------------------------
+- El test es determinístico: dada la estabilidad del entorno de SauceDemo,
+  las ejecuciones repetidas producen el mismo resultado sin flakiness detectado.
+- No fue necesario implementar esperas explícitas (cy.wait() con tiempo fijo)
+  gracias al modelo de reintentos automático de Cypress.
+- Las aserciones de URL entre pasos actúan como barreras de sincronización
+  naturales, confirmando que la navegación completó antes de interactuar con
+  el siguiente paso.
+
+
+POSIBLES MEJORAS
+----------------
+1. Cobertura de casos negativos: agregar specs para locked_out_user y
+   entradas inválidas en el formulario para validar mensajes de error.
+2. Integración CI/CD: configurar un workflow de GitHub Actions que ejecute
+   la suite en cada pull request y publique los resultados automáticamente.
+3. Pruebas cross-browser: ejecutar la suite en Chrome, Firefox y Edge usando
+   los runners nativos de Cypress para validar compatibilidad.
+4. Visual regression testing: integrar cy-image-snapshot o Percy para
+   detectar regresiones visuales entre releases.
+5. Reportes enriquecidos: integrar Mochawesome o Allure para generar reportes
+   HTML con capturas de pantalla de los fallos.
